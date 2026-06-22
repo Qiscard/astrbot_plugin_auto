@@ -4,14 +4,8 @@
 
 ## 特性
 
-- 🔄 **信息源随机/循环抽取** — 支持完全随机和不重复循环两种模式
-- 📊 **15种信息源** — 系统监控、一言、毒鸡汤、名人名言、B站/微博/百度/抖音热搜、倒计时等
-- 🎯 **同一信息源多配置** — 如多个倒计时（元旦/国庆），随机轮换
-- 🔑 **ALAPI 集成** — 一言/毒鸡汤/名言/热搜共用 ALAPI 平台，用户自主填入 Token
-- 🚀 **三种更新模式** — 快速(100ms)、普通(250ms)、超慢速(逐群)
-- 🎨 **WebUI 配置** — 带下拉选择的可视化配置
-- 📋 **群聊管理** — 自动缓存群列表，一键批量添加
-- ✍️ **自动签名** — 独立于群名片的签名更新任务
+- 📊 **个性化信息源** — 系统监控、一言、毒鸡汤、名人名言、B站/微博/百度/抖音热搜、倒计时等
+- 🎨 **自动缓存群组** — 缓存后直接在webui中框选即可，麻麻再也不用担心手动一个个输入群号啦
 
 ## 信息源
 
@@ -25,10 +19,10 @@
 | countup | 正计时（已过时间） |
 | current_time | 当前时间 |
 | custom_text | 自定义文本 |
-| weibo_hot | 微博热搜（免费 API，每日缓存+随机） |
-| douyin_hot | 抖音热搜（免费 API，每日缓存+随机） |
-| bilibili_hot | B站热搜（免费 API，每日缓存+随机） |
-| baidu_hot | 百度热搜（免费 API，每日缓存+随机） |
+| weibo_hot | 微博热搜 |
+| douyin_hot | 抖音热搜 |
+| bilibili_hot | B站热搜 |
+| baidu_hot | 百度热搜 |
 | hitokoto | 一言（需 API Key） |
 | soul | 毒鸡汤（需 API Key） |
 | mingyan | 名人名言（需 API Key） |
@@ -46,7 +40,7 @@
 
 1. WebUI → 插件管理 → 自动群名片 → 启用并配置
 2. 重启 AstrBot 或重载插件（自动初始化）
-3. 发送 `缓存所有群聊` → WebUI 目标群列表出现下拉选项
+3. 发送 `/缓存所有群聊` → 重载后WebUI 目标群列表出现下拉选项
 4. 选择目标群 → 保存 → 自动开始更新
 
 ## 配置项
@@ -59,7 +53,7 @@
 | interval | 更新间隔（秒） | 60 |
 | hourly_mode | 整点模式 | false |
 | random_mode | 随机模式（开=完全随机，关=不重复循环） | true |
-| alapi_token | ALAPI Token（兜底备用，每日限100次） | "" |
+| alapi_token | ALAPI Token（兜底，免费版每日限100次） | "" |
 | juhe_ckey | 聚合 API Key（主方案，一言/毒鸡汤/名言） | "" |
 | update_mode | 更新模式（0=快速150ms, 1=普通350ms, 2=超慢速750ms） | "1" |
 | signature_enabled | 启用签名 | false |
@@ -69,14 +63,14 @@
 
 ## API Key 配置
 
-### juhe_ckey（主方案 / 推荐）
+### juhe_ckey
 
 一言、毒鸡汤、名人名言使用 [https://api.317ak.cn](https://api.317ak.cn) 聚合接口，需注册获取 Key：
 
 1. 前往 [https://api.317ak.cn](https://api.317ak.cn) 注册获取 `ckey`
 2. 填入插件配置的 `juhe_ckey` 字段
 
-### alapi_token（兜底方案）
+### alapi_token
 
 当 `juhe_ckey` 未配置时，同上述功能降级为 ALAPI（每日仅 100 次免费调用）。
 同时作为百度热搜的接口源。
@@ -86,23 +80,22 @@
 
 ## 更新模式说明
 
-- **快速(0)** — 一次更新所有目标群，群间间隔 150ms
-- **普通(1)** — 一次更新所有目标群，群间间隔 350ms  
-- **超慢速(2)** — 一次更新所有目标群，群间间隔 750ms
+- **普通** — 一次更新所有目标群，群间间隔 150ms(首选)
+- **慢速** — 一次更新所有目标群，群间间隔 350ms  
+- **超慢速** — 一次更新所有目标群，群间间隔 750ms
 
 ## 随机模式
 
-- **开启** — 每次 `random.choice()` 完全独立随机
+- **开启** — 每次展示的信息完全独立随机
 - **关闭** — 洗牌后依次取完再洗牌，实现不重复循环
 
 ## 许可
 
 本项目基于 [GNU General Public License v3.0](LICENSE) 发布。
 
-Copyright (C) 2025-2026 Qiscard
 
 ## 致谢
 
 - **插件框架** — [astrbot_plugin_qqprofile](https://github.com/Zhalslar/astrbot_plugin_qqprofile) by [Zhalslar](https://github.com/Zhalslar)
 - **灵感来源** — [auto-plugin](https://github.com/Nwflower/auto-plugin) by [Nwflower](https://github.com/Nwflower)
-- **AI 辅助** — 插件主体代码 99% 由 AI 生成（Claude Opus 4.8（好像掺水了） / DeepSeek V4 Flash），本人负责需求梳理、方案设计、逻辑校验与持续迭代优化
+- **AI 辅助** — 插件主体代码由 AI 生成（Claude Opus 4.8（好像掺水了） / DeepSeek V4 Flash）

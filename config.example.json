@@ -1,0 +1,35 @@
+{
+  "enabled": true,
+  "target_groups": [
+    "123456789",
+    "987654321"
+  ],
+  "sources": [
+    "system_info",
+    "countdown",
+    "hitokoto"
+  ],
+  "interval": 60,
+  "signature_enabled": true,
+  "signature_sources": [
+    "hitokoto",
+    "weibo_hot"
+  ],
+  "signature_interval": 3600,
+  "source_configs": [
+    {
+      "__template_key": "countdown",
+      "target_date": "2027-01-01",
+      "event_name": "元旦",
+      "template": "距{event}还有{days}天"
+    },
+    {
+      "__template_key": "hitokoto",
+      "category": "d"
+    },
+    {
+      "__template_key": "weibo_hot",
+      "top_n": 1
+    }
+  ]
+}

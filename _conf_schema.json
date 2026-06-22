@@ -1,0 +1,228 @@
+{
+    "enabled": {
+        "description": "启用自动群名片",
+        "hint": "开启后将定时更新指定群的群名片",
+        "type": "bool",
+        "default": false
+    },
+    "target_groups": {
+        "description": "目标群列表",
+        "hint": "先使用「缓存所有群聊」命令刷新群列表，然后这里会出现下拉选择（也可手动输入群号）",
+        "type": "list",
+        "default": [],
+        "options": [],
+        "labels": []
+    },
+    "sources": {
+        "description": "展示信息列表（多选）",
+        "hint": "选择多个信息源将自动循环切换。按顺序轮换显示",
+        "type": "list",
+        "options": [
+            "system_memory",
+            "system_cpu",
+            "system_info",
+            "system_disk",
+            "countdown",
+            "countup",
+            "current_time",
+            "custom_text",
+            "weibo_hot",
+            "douyin_hot",
+            "bilibili_hot",
+            "hitokoto",
+            "soul",
+            "mingyan",
+            "baidu_hot"
+        ],
+        "labels": [
+            "系统内存",
+            "系统CPU",
+            "系统综合信息",
+            "系统磁盘",
+            "倒计时",
+            "正计时",
+            "当前时间",
+            "自定义文本",
+            "微博热搜",
+            "抖音热搜",
+            "B站热搜",
+            "一言",
+            "毒鸡汤",
+            "名人名言",
+            "百度热搜"
+        ],
+        "default": [
+            "system_info"
+        ]
+    },
+    "interval": {
+        "description": "更新间隔（秒）",
+        "hint": "每隔N秒更新一次群名片（如果选择了多个信息源，则循环切换）",
+        "type": "int",
+        "slider": {
+            "min": 10,
+            "max": 3600,
+            "step": 10
+        },
+        "default": 60
+    },
+    "hourly_mode": {
+        "description": "整点模式",
+        "hint": "启用后会在下一次满足条件的第0秒开始更新（例如间隔60秒会在每分钟的第0秒更新）",
+        "type": "bool",
+        "default": false
+    },
+    "random_mode": {
+        "description": "随机模式",
+        "hint": "开启后完全随机抽取展示信息；关闭后不重复循环抽取（洗牌后依次取完再洗牌）",
+        "type": "bool",
+        "default": true
+    },
+    "juhe_ckey": {
+        "description": "聚合 API Key",
+        "hint": "用于一言/毒鸡汤/名人名言等接口的主要方案。前往 https://api.317ak.cn/ 注册获取",
+        "type": "string",
+        "default": ""
+    },
+    "alapi_token": {
+        "description": "ALAPI Token",
+        "hint": "用于一言/毒鸡汤/名言/热搜等接口的备用方案。前往 https://www.alapi.cn 注册获取",
+        "type": "string",
+        "default": ""
+    },
+    "update_mode": {
+        "description": "更新模式",
+        "hint": "控制多群更新速度，避免被限制",
+        "type": "string",
+        "options": [
+            "0",
+            "1",
+            "2"
+        ],
+        "labels": [
+            "普通（群间间隔150ms）",
+            "慢速（群间间隔350ms）",
+            "超慢速（群间间隔750ms）"
+        ],
+        "default": "1"
+    },
+    "signature_enabled": {
+        "description": "启用自动签名",
+        "hint": "开启后将定时更新Bot的个性签名",
+        "type": "bool",
+        "default": false
+    },
+    "signature_sources": {
+        "description": "签名信息源（多选）",
+        "hint": "选择多个信息源将自动循环切换",
+        "type": "list",
+        "options": [
+            "countdown",
+            "countup",
+            "current_time",
+            "custom_text",
+            "weibo_hot",
+            "douyin_hot",
+            "bilibili_hot",
+            "hitokoto",
+            "soul",
+            "mingyan",
+            "baidu_hot"
+        ],
+        "labels": [
+            "倒计时",
+            "正计时",
+            "当前时间",
+            "自定义文本",
+            "微博热搜",
+            "抖音热搜",
+            "B站热搜",
+            "百度热搜",
+            "一言",
+            "毒鸡汤",
+            "名人名言"
+        ],
+        "default": [
+            "hitokoto"
+        ]
+    },
+    "signature_interval": {
+        "description": "签名更新间隔（秒）",
+        "hint": "每隔N秒更新一次签名",
+        "type": "int",
+        "slider": {
+            "min": 60,
+            "max": 7200,
+            "step": 60
+        },
+        "default": 3600
+    },
+    "signature_hourly_mode": {
+        "description": "签名整点模式",
+        "hint": "启用后会在下一次满足条件的第0秒开始更新",
+        "type": "bool",
+        "default": false
+    },
+    "source_configs": {
+        "description": "信息源配置",
+        "type": "template_list",
+        "hint": "为特定信息源配置个性化参数",
+        "templates": {
+            "countdown": {
+                "name": "倒计时配置",
+                "items": {
+                    "target_date": {
+                        "description": "目标日期",
+                        "hint": "格式: YYYY-MM-DD，如 2027-01-01",
+                        "type": "string",
+                        "default": "2027-01-01"
+                    },
+                    "event_name": {
+                        "description": "事件名称",
+                        "type": "string",
+                        "default": "元旦"
+                    },
+                    "template": {
+                        "description": "显示模板",
+                        "hint": "可用变量: {ev} {d} {h} {m}",
+                        "type": "string",
+                        "default": "距{ev}还有{d}天"
+                    }
+                }
+            },
+            "countup": {
+                "name": "正计时配置",
+                "items": {
+                    "target_date": {
+                        "description": "起始日期",
+                        "hint": "格式: YYYY-MM-DD，如 2024-01-01",
+                        "type": "string",
+                        "default": "2024-01-01"
+                    },
+                    "event_name": {
+                        "description": "事件名称",
+                        "type": "string",
+                        "default": "已经"
+                    },
+                    "template": {
+                        "description": "显示模板",
+                        "hint": "可用变量: {ev} {y} {m} {d}",
+                        "type": "string",
+                        "default": "{ev}过了{y}年{m}月{d}天"
+                    }
+                }
+            },
+            "custom_text": {
+                "name": "自定义文本配置",
+                "items": {
+                    "text": {
+                        "description": "自定义文本",
+                        "hint": "可用变量: {time} {date} {datetime}",
+                        "type": "text",
+                        "default": "当前时间 {time}"
+                    }
+                }
+            }
+        }
+    }
+}

@@ -149,8 +149,8 @@ class CustomTextSource(DataSource):
 # ── 聚合 API（317ak.cn） + ALAPI 兜底 ──────────────────
 
 class _JuheSource(DataSource):
-    """317ak.cn 聚合 API 基类，ckey 不足时降级 ALAPI"""
-    _MSG = ""  # 子类覆盖：随机一言 / 毒鸡汤 / 英汉语录 ...
+    """317ak.cn 聚合 API 基类，ckey 不足时降级免费 API 再降级 ALAPI"""
+    _MSG = ""  # 子类覆盖
 
     async def get_data(self) -> str:
         ckey = self.config.get("juhe_ckey", "")
@@ -159,25 +159,51 @@ class _JuheSource(DataSource):
                 async with aiohttp.ClientSession(headers={"User-Agent": USER_AGENT}) as s:
                     url = f"https://api.317ak.cn/api/wz/juhe?ckey={ckey}&msg={self._MSG}&type=json"
                     async with s.get(url, timeout=aiohttp.ClientTimeout(10)) as r:
-                        d = await r.json()
-                        if d.get("code") == 200:
-                            txt = d.get("data", "")
-                            if isinstance(txt, dict):
-                                txt = txt.get("content", "") or txt.get("text", "") or str(txt)
-                            if txt:
-                                return txt[:MAX_CARD_LEN]
+                        d = await r.json(content_type=None)
+                        # 实际返回格式: {"text": "内容..."} 或 {"code":200, "data":"..."}
+                        txt = d.get("text", "") or d.get("data", "")
+                        if isinstance(txt, dict):
+                            txt = txt.get("content", "") or txt.get("text", "") or str(txt)
+                        if txt:
+                            return txt[:MAX_CARD_LEN]
+                        code = d.get("code")
+                        if code and code != 200:
+                            err_map = {203:"ckey错误",211:"接口不存在",212:"已下架",
+                                       213:"审核中",216:"需ckey",217:"ckey不存在",
+                                       218:"ckey无权限",219:"频率限制",
+                                       223:"积分不足",224:"余额不足",
+                                       225:"IP未在白名单"}
+                            logger.warning(f"[{self._MSG}] 317ak → {err_map.get(code, f'错误码{code}')}")
             except Exception as e:
-                logger.debug(f"[{self._MSG}] 317ak 失败，尝试 ALAPI: {e}")
+                logger.warning(f"[{self._MSG}] 317ak 请求异常: {e}")
 
-        # 降级：ALAPI
+        # 免费 API 兜底（不消耗 ALAPI 额度）
+        free = await self._free_fallback()
+        if free:
+            return free
+
+        # ALAPI 降级
         token = self.config.get("token", "")
         if token:
             return await self._alapi_fallback(token)
         return f"{self._MSG}: 未配置 API Key"
 
+    async def _free_fallback(self) -> str | None:
+        return None
+
 
 class HitokotoSource(_JuheSource):
     _MSG = "随机一言"
+
+    async def _free_fallback(self) -> str | None:
+        try:
+            async with aiohttp.ClientSession() as s:
+                async with s.get("https://v1.hitokoto.cn/", timeout=10) as r:
+                    d = await r.json()
+                    return (d.get("hitokoto", "") or "")[:MAX_CARD_LEN]
+        except Exception as e:
+            logger.warning(f"[一言] 免费 API 失败: {e}")
+            return None
 
     async def _alapi_fallback(self, token: str) -> str:
         try:
@@ -197,6 +223,18 @@ class HitokotoSource(_JuheSource):
 class SoulSource(_JuheSource):
     _MSG = "毒鸡汤"
 
+    async def _free_fallback(self) -> str | None:
+        try:
+            async with aiohttp.ClientSession() as s:
+                async with s.get("https://api.btstu.cn/sjbz/api.php?lx=djt&format=json", timeout=10) as r:
+                    d = await r.json()
+                    txt = d.get("text", "") or ""
+                    if txt:
+                        return txt[:MAX_CARD_LEN]
+        except Exception:
+            pass
+        return None
+
     async def _alapi_fallback(self, token: str) -> str:
         try:
             async with aiohttp.ClientSession() as s:
@@ -212,6 +250,19 @@ class SoulSource(_JuheSource):
 
 class MingYanSource(_JuheSource):
     _MSG = "经典语录"
+
+    async def _free_fallback(self) -> str | None:
+        try:
+            async with aiohttp.ClientSession() as s:
+                async with s.get("https://api.btstu.cn/sjbz/api.php?lx=mingyan&format=json", timeout=10) as r:
+                    d = await r.json()
+                    content = d.get("text", "") or ""
+                    author = d.get("author", "") or ""
+                    if content:
+                        return f"{content[:50]} ——{author[:8]}" if author else content[:MAX_CARD_LEN]
+        except Exception:
+            pass
+        return None
 
     async def _alapi_fallback(self, token: str) -> str:
         try:

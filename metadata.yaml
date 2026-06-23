@@ -20,6 +20,6 @@ help: |
   - 一键添加所有群聊到目标
   - 添加目标群 <关键词>
 
-version: v3.1.0
+version: v3.2.0
 author: Qiscard
 repo: https://github.com/Qiscard/astrbot_plugin_auto

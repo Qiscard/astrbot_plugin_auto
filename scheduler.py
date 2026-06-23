@@ -40,17 +40,22 @@ class SimpleScheduler:
             self.task.cancel()
 
         async def run_task():
-            # 如果是整点模式，先等待到下一个整点
-            if self.hourly_mode:
-                now = time.time()
-                wait_time = self.interval - (now % self.interval)
-                logger.info(f"整点模式已启用，将在 {wait_time:.1f} 秒后开始首次更新")
-                await asyncio.sleep(wait_time)
-
+            # 整点模式：首次立即执行，之后每次循环对齐整点
+            first_run = True
             while True:
                 try:
                     await self.func()
-                    await asyncio.sleep(self.interval)
+                    if self.hourly_mode:
+                        now = time.time()
+                        wait_time = self.interval - (now % self.interval)
+                        if wait_time < 0.1:
+                            wait_time = self.interval
+                        if first_run:
+                            first_run = False
+                            logger.info(f"整点模式已启用，将在 {wait_time:.1f} 秒后对齐整点")
+                        await asyncio.sleep(wait_time)
+                    else:
+                        await asyncio.sleep(self.interval)
                 except asyncio.CancelledError:
                     break
                 except Exception as e:

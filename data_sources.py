@@ -4,6 +4,7 @@
 import json
 import os
 import random
+import unicodedata
 from abc import ABC, abstractmethod
 from datetime import date, datetime
 from typing import Any, Dict
@@ -14,7 +15,26 @@ from astrbot import logger
 
 USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
 
-MAX_CARD_LEN = 55  # 安全截断长度
+MAX_CARD_LEN = 60   # 群名片：中文/中文符号=3，英文/英文字符=1，总额度60
+MAX_SIG_LEN = 80    # 个签：所有符号=1，总额度80
+
+
+def get_card_length(s: str) -> int:
+    """计算群名片有效长度（QQ规则）：
+    中文字符及全角符号=3，英文及半角符号=1"""
+    length = 0
+    for c in s:
+        w = unicodedata.east_asian_width(c)
+        if w in ('W', 'F'):      # Wide / Fullwidth
+            length += 3
+        else:                    # Na, N, H, A
+            length += 1
+    return length
+
+
+def get_sig_length(s: str) -> int:
+    """计算个签有效长度：所有符号均占1"""
+    return len(s)
 
 
 class DataSource(ABC):
@@ -70,17 +90,23 @@ class CountdownSource(DataSource):
         ts = self.config.get("target_date")
         ev = self.config.get("event_name", "目标日期")
         if not ts:
-            return "未配置倒计时日期"
+            return "no date set"
         try:
             f = "%Y-%m-%d %H:%M:%S" if " " in ts else "%Y-%m-%d"
             delta = datetime.strptime(ts, f) - datetime.now()
             if delta.total_seconds() < 0:
-                return f"{ev}已过去{abs(delta.days)}天"
-            s = delta.seconds
-            t = self.config.get("template", "距{ev}还有{d}天{h}时{m}分")
-            return t.format(ev=ev, d=delta.days, h=s // 3600, m=(s % 3600) // 60)
+                return f"{ev} +{abs(delta.days)}d"
+            total_secs = int(delta.total_seconds())
+            days = delta.days
+            rem_hours = (total_secs // 3600) % 24
+            rem_mins = (total_secs % 3600) // 60
+            total_hours = total_secs // 3600
+            total_mins = total_secs // 60
+            t = self.config.get("template", "{ev} {d}d {h}h {m}m")
+            return t.format(ev=ev, d=days, h=rem_hours, m=rem_mins,
+                            H=total_hours, M=total_mins, day=days)
         except Exception as e:
-            return "倒计时格式错误"
+            return "err cd"
 
 
 class CountUpSource(DataSource):
@@ -88,21 +114,25 @@ class CountUpSource(DataSource):
         ts = self.config.get("target_date")
         ev = self.config.get("event_name", "目标日期")
         if not ts:
-            return "未配置正计时日期"
+            return "no date set"
         try:
             f = "%Y-%m-%d %H:%M:%S" if " " in ts else "%Y-%m-%d"
             start = datetime.strptime(ts, f)
             delta = datetime.now() - start
             if delta.total_seconds() < 0:
-                return f"{ev}还未到来"
+                return f"{ev} not yet"
+            total_secs = int(delta.total_seconds())
             total_days = delta.days
             years = total_days // 365
             months = (total_days % 365) // 30
             days = (total_days % 365) % 30
-            t = self.config.get("template", "已经过了{y}年{m}月{d}天")
-            return t.format(ev=ev, y=years, m=months, d=days)
+            total_hours = total_secs // 3600
+            total_mins = total_secs // 60
+            t = self.config.get("template", "{ev} {y}y {m}m {d}d")
+            return t.format(ev=ev, y=years, m=months, d=days,
+                            day=total_days, H=total_hours, M=total_mins)
         except Exception as e:
-            return "正计时格式错误"
+            return "err cu"
 
 
 # ── 自定义文本 ─────────────────────────────────────────
@@ -113,7 +143,7 @@ class CustomTextSource(DataSource):
         n = datetime.now()
         t = t.replace("{time}", n.strftime("%H:%M:%S")).replace("{date}", n.strftime("%Y-%m-%d"))
         t = t.replace("{datetime}", n.strftime("%Y-%m-%d %H:%M:%S"))
-        return t[:MAX_CARD_LEN]
+        return t
 
 
 # ── 聚合 API（317ak.cn） + ALAPI 兜底 ──────────────────
@@ -233,8 +263,8 @@ class _HotSearchSource(DataSource):
         return []
 
     def filter_items(self, items: list) -> list:
-        """保留标题不超过限制的条目"""
-        return [i for i in items if len(i.get("title", "")) <= MAX_CARD_LEN]
+        """保留标题不超过群名片长度限制的条目"""
+        return [i for i in items if get_card_length(i.get("title", "")) <= MAX_CARD_LEN]
 
     async def get_data(self) -> str:
         items = self._load_cache()

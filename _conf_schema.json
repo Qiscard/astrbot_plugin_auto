@@ -184,9 +184,9 @@
                     },
                     "template": {
                         "description": "显示模板",
-                        "hint": "可用变量: {ev} {d} {h} {m}",
+                        "hint": "可用变量: {ev} {d} {h} {m} {H} {M} {day}",
                         "type": "string",
-                        "default": "距{ev}还有{d}天"
+                        "default": "{ev} {d}天{h}时{m}分"
                     }
                 }
             },
@@ -206,9 +206,9 @@
                     },
                     "template": {
                         "description": "显示模板",
-                        "hint": "可用变量: {ev} {y} {m} {d}",
+                        "hint": "可用变量: {ev} {y} {m} {d} {day} {H} {M}",
                         "type": "string",
-                        "default": "{ev}过了{y}年{m}月{d}天"
+                        "default": "{ev} {y}年{m}月{d}天"
                     }
                 }
             },

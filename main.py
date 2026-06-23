@@ -14,12 +14,10 @@ from astrbot.api.event import filter
 from astrbot.api.event.filter import on_platform_loaded
 from astrbot.api.star import Context, Star
 from astrbot.core.config.astrbot_config import AstrBotConfig
-from astrbot.core.platform.sources.aiocqhttp.aiocqhttp_message_event import (
-    AiocqhttpMessageEvent,
-)
+from astrbot.core.platform.sources.aiocqhttp.aiocqhttp_message_event import AiocqhttpMessageEvent
 from astrbot.core.star.filter.permission import PermissionType
 
-from .data_sources import DataSourceManager
+from .data_sources import DataSourceManager, get_card_length, get_sig_length, MAX_CARD_LEN, MAX_SIG_LEN
 from .scheduler import SimpleScheduler
 
 GROUPS_CACHE_FILENAME = "astrbot_plugin_auto_groups_cache.json"
@@ -102,11 +100,8 @@ class AutoGroupCardPlugin(Star):
             path = self.conf.config_path
             if path and os.path.exists(path):
                 with open(path, encoding="utf-8-sig") as f:
-                    c = f.read()
-                    if c.startswith("﻿"):
-                        c = c[1:]
                     self.conf.clear()
-                    self.conf.update(json.loads(c))
+                    self.conf.update(json.loads(f.read()))
         except Exception as e:
             logger.warning(f"[auto-group-card] 刷新配置失败: {e}")
 
@@ -200,12 +195,20 @@ class AutoGroupCardPlugin(Star):
             logger.warning("自动群名片已启用，但未选择信息源"); return
 
         update_mode = int(self.conf.get("update_mode", "1"))
-        mode_labels = {0: "快速(100ms)", 1: "普通(250ms)", 2: "超慢速(逐群)"}
+        mode_labels = {0: "快速(150ms)", 1: "普通(350ms)", 2: "超慢速(750ms)"}
         logger.info(f"群名片: {len(sources)}个信息源, {len(target_groups)}个目标群, {interval}秒, 模式{mode_labels.get(update_mode, '?')}")
 
         async def update_card():
             if not self.bot_instance or not self.bot_self_id:
-                return
+                if self.bot_instance and not self.bot_self_id:
+                    try:
+                        info = await self.bot_instance.call_action("get_login_info")
+                        self.bot_self_id = str(info["user_id"])
+                        logger.info(f"[auto-group-card] 重试获取 QQ 成功: {self.bot_self_id}")
+                    except Exception:
+                        pass
+                if not self.bot_instance or not self.bot_self_id:
+                    return
             self._refresh_config()
             tg = self.conf.get("target_groups", [])
             sc = self.conf.get("sources", ["system_info"])
@@ -218,21 +221,37 @@ class AutoGroupCardPlugin(Star):
                 return
             rand = self.conf.get("random_mode", True)
             um = int(self.conf.get("update_mode", "1"))
-            delay = {0: 0.15, 1: 0.35, 2: 0.75}.get(um, 0.1)
-            label = {0: "快速", 1: "普通", 2: "超慢速"}.get(um, "?")
-            src, cfg, self._card_cyclic_list, self._card_cyclic_idx = self._pick(
-                expanded, self._card_cyclic_list, self._card_cyclic_idx, rand)
-            ds = self.data_source_manager.create_source(src, cfg)
-            card = await ds.get_data()
+            cur_delay = {0: 0.15, 1: 0.35, 2: 0.75}.get(um, 0.1)
+
+            # 尝试信息源，如果生成内容超过群名片长度限制则换下一个，最多尝试10次
+            card = None
+            used_src = ""
+            tried_idx = 0
+            for _ in range(10):
+                src, cfg, self._card_cyclic_list, self._card_cyclic_idx = self._pick(
+                    expanded, self._card_cyclic_list, self._card_cyclic_idx, rand)
+                ds = self.data_source_manager.create_source(src, cfg)
+                candidate = await ds.get_data()
+                if get_card_length(candidate) <= MAX_CARD_LEN:
+                    card = candidate
+                    used_src = src
+                    break
+                tried_idx += 1
+                logger.info(f"[群名片] ❌ 超限({get_card_length(candidate)}>{MAX_CARD_LEN}): {candidate[:20]}... 尝试下一信息源")
+            if card is None:
+                logger.warning(f"[群名片] 所有信息源均超出长度限制，跳过本轮更新")
+                return
+
             ok = 0
             for i, gid in enumerate(tg):
-                if i > 0: await asyncio.sleep(delay)
+                if i > 0: await asyncio.sleep(cur_delay)
                 try:
                     await self.bot_instance.call_action("set_group_card", group_id=int(gid), user_id=int(self.bot_self_id), card=card)
                     ok += 1
                 except Exception as e:
                     logger.error(f"[群名片] 更新群 {gid} 失败: {e}")
-            logger.info(f"[群名片] ✅ {label}: {card} ({src}, {ok}/{len(tg)})")
+            src_label = f", 跳过了{tried_idx}个超限源" if tried_idx > 0 else ""
+            logger.info(f"[群名片] ✅ {card} ({used_src}{src_label}, {ok}/{len(tg)})")
 
         self.card_scheduler.set_task(update_card, interval, enabled=True, hourly_mode=hourly_mode)
         self.card_scheduler.start()
@@ -263,13 +282,31 @@ class AutoGroupCardPlugin(Star):
             if not expanded:
                 return
             rand = self.conf.get("random_mode", True)
-            src, cfg, self._sig_cyclic_list, self._sig_cyclic_idx = \
-                self._pick(expanded, self._sig_cyclic_list, self._sig_cyclic_idx, rand)
+
+            # 尝试信息源，如果生成内容超过个签长度限制则换下一个，最多尝试10次
+            sig = None
+            used_src = ""
+            for _ in range(10):
+                src, cfg, self._sig_cyclic_list, self._sig_cyclic_idx = \
+                    self._pick(expanded, self._sig_cyclic_list, self._sig_cyclic_idx, rand)
+                try:
+                    ds = self.data_source_manager.create_source(src, cfg)
+                    candidate = await ds.get_data()
+                    if get_sig_length(candidate) <= MAX_SIG_LEN:
+                        sig = candidate
+                        used_src = src
+                        break
+                    logger.info(f"[签名] ❌ 超限({get_sig_length(candidate)}>{MAX_SIG_LEN}): {candidate[:20]}... 尝试下一信息源")
+                except Exception as e:
+                    logger.debug(f"[签名] 信息源 {src} 失败: {e}")
+                    continue
+            if sig is None:
+                logger.warning(f"[签名] 所有信息源均超出长度限制，跳过本轮更新")
+                return
+
             try:
-                ds = self.data_source_manager.create_source(src, cfg)
-                sig = await ds.get_data()
                 await self.bot_instance.set_self_longnick(longNick=sig)
-                logger.info(f"[签名] ✅ {sig} ({src})")
+                logger.info(f"[签名] ✅ {sig} ({used_src})")
             except Exception as e:
                 logger.error(f"[签名] ❌ 失败: {e}", exc_info=True)
 
@@ -329,7 +366,7 @@ class AutoGroupCardPlugin(Star):
         if not isinstance(sig_sources, list): sig_sources = [sig_sources] if sig_sources else []
         if not isinstance(target_groups, list): target_groups = []
 
-        names = {"system_memory":"系统内存","system_cpu":"系统CPU","system_info":"系统综合信息","system_disk":"系统磁盘","countdown":"倒计时","hitokoto":"一言","weibo_hot":"微博热搜","baidu_hot":"百度热搜","douyin_hot":"抖音热搜","current_time":"当前时间","custom_text":"自定义文本"}
+        names = {"system_memory":"系统内存","system_cpu":"系统CPU","system_info":"系统综合信息","system_disk":"系统磁盘","countdown":"倒计时","countup":"正计时","hitokoto":"一言","weibo_hot":"微博热搜","baidu_hot":"百度热搜","douyin_hot":"抖音热搜","current_time":"当前时间","custom_text":"自定义文本"}
         s = "【自动群名片状态】\n\n"
         s += f"━━━ 群名片 ━━━\n启用: {'✅' if card_enabled else '❌'} | 间隔: {card_interval}秒 | 目标: {len(target_groups)}个 | 信息源: {len(card_sources)}个\n"
         if card_sources:
@@ -357,6 +394,7 @@ class AutoGroupCardPlugin(Star):
         await self._ensure_bot_initialized(event)
         if not hasattr(event, 'group_id') or not event.group_id:
             yield event.plain_result("请在群聊中使用此命令"); return
+        self._refresh_config()
         sources = self.conf.get("sources", ["system_info"])
         if not isinstance(sources, list): sources = [sources] if sources else []
         if not sources: yield event.plain_result("未配置信息源"); return
@@ -368,6 +406,10 @@ class AutoGroupCardPlugin(Star):
         try:
             ds = self.data_source_manager.create_source(src, cfg)
             card = await ds.get_data()
+            cl = get_card_length(card)
+            if cl > MAX_CARD_LEN:
+                yield event.plain_result(f"❌ 内容超限({cl}>{MAX_CARD_LEN})，请换其他信息源或精简模板")
+                return
             await event.bot.call_action("set_group_card", group_id=int(event.group_id), user_id=int(event.get_self_id()), card=card)
             logger.info(f"[手动更新] ✅ {card}")
             yield event.plain_result(f"✅ 已更新: {card}")
